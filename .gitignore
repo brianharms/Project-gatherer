@@ -1,0 +1,5 @@
+__pycache__/
+*.pyc
+
+# App output folders (in case the app is ever run from the repo)
+ProjectGather__*/
