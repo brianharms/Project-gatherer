@@ -1,0 +1,95 @@
+name: Build standalone apps
+
+# Builds self-contained Mac and Windows binaries so the app can run on a
+# machine that has no Python installed. PyInstaller cannot cross-compile, so
+# each binary is built on its own native GitHub runner.
+#
+# Run it two ways:
+#   • Manually  – Actions tab -> "Build standalone apps" -> Run workflow.
+#     The binaries appear as downloadable artifacts on that run.
+#   • By tag    – push a tag like v1.0 and the binaries are also attached to a
+#     GitHub Release.
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # needed only for the release job on tags
+
+jobs:
+  build:
+    name: Build (${{ matrix.label }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: macOS
+            artifact: ProjectGatherer-macOS
+          - os: windows-latest
+            label: Windows
+            artifact: ProjectGatherer-Windows
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller
+
+      - name: Build binary
+        run: >
+          pyinstaller --noconfirm --clean --onefile --windowed
+          --name "Project Gatherer" project_gatherer.py
+
+      # Ship the projects-file template and README next to the binary so a
+      # freshly-downloaded build is ready to drop straight onto a drive.
+      - name: Stage extras (macOS/Linux shell)
+        if: runner.os != 'Windows'
+        run: |
+          cp PROJECTS.md README.md dist/ || true
+      - name: Stage extras (Windows shell)
+        if: runner.os == 'Windows'
+        run: |
+          copy PROJECTS.md dist\
+          copy README.md dist\
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    name: Attach binaries to release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Zip each platform build
+        run: |
+          cd artifacts
+          for d in */; do
+            name="${d%/}"
+            (cd "$d" && zip -r "../${name}.zip" .)
+          done
+          ls -la
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true

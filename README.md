@@ -127,28 +127,56 @@ arguments launches the graphical app.
 
 ---
 
-## Optional: building standalone apps
+## Optional: standalone apps (no Python needed)
 
-To hand this to a machine with **no Python installed**, build a self-contained
-binary on each target OS (PyInstaller can't cross-compile, so build on a Mac for
-the Mac app and on Windows for the `.exe`):
+To run on a machine with **no Python installed**, use a self-contained binary. A
+`.app` (Mac) and `.exe` (Windows) built side by side let the same drive work on
+either computer. Because PyInstaller can't cross-compile, each binary must be
+built on its own OS — so the easiest path is GitHub Actions, which has both.
+
+### Easiest: let GitHub build both for you
+
+A workflow at `.github/workflows/build-apps.yml` builds both binaries on native
+runners:
+
+- **Manually:** repo → **Actions** tab → **Build standalone apps** → **Run
+  workflow**. When it finishes, download the `ProjectGatherer-macOS` and
+  `ProjectGatherer-Windows` artifacts from that run.
+- **By tag:** `git tag v1.0 && git push origin v1.0` also attaches zipped
+  binaries to a GitHub **Release**.
+
+Unzip both onto your drive and you're done.
+
+### Or build locally
 
 **On a Mac:**
 ```bash
 pip3 install pyinstaller
-pyinstaller --windowed --name "Project Gatherer" project_gatherer.py
+pyinstaller --onefile --windowed --name "Project Gatherer" project_gatherer.py
 # result: dist/Project Gatherer.app
 ```
 
 **On Windows:**
 ```bat
 pip install pyinstaller
-pyinstaller --windowed --name "Project Gatherer" project_gatherer.py
-REM result: dist\Project Gatherer\Project Gatherer.exe
+pyinstaller --onefile --windowed --name "Project Gatherer" project_gatherer.py
+REM result: dist\Project Gatherer.exe
 ```
 
 Copy the resulting `.app` / `.exe` (plus your `PROJECTS.md`) onto the drive.
-Keep a Mac build and a Windows build side by side so the drive works on either.
+
+### First-launch security prompt (unsigned builds)
+
+These binaries aren't code-signed (that needs a paid Apple/Microsoft
+certificate), so the OS warns once on first launch. This is expected:
+
+- **macOS:** right-click the app → **Open** → **Open**. (If it says the app "is
+  damaged", clear the download quarantine once in Terminal:
+  `xattr -dr com.apple.quarantine "/Volumes/YourDrive/Project Gatherer.app"`.)
+- **Windows:** on the SmartScreen dialog click **More info → Run anyway**.
+
+After the first launch it opens normally. The plain Python script (via the
+`Run on…` launchers) doesn't trigger these prompts at all.
 
 ---
 
